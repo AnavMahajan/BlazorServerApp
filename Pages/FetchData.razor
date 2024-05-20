@@ -1,0 +1,77 @@
+﻿@page "/fetchdata"
+
+@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Text.Json
+@using BlazorServerApp.Data
+@inject HttpClient Http
+
+<h3>Fetch Data</h3>
+
+@if (results != null && results.Any())
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Word</th>
+                <th>Word Count</th>
+                <th>Corpus</th>
+                <th>Corpus Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var result in results)
+            {
+                <tr>
+                    <td>@result.word</td>
+                    <td>@result.word_count</td>
+                    <td>@result.corpus</td>
+                    <td>@result.corpus_date</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else
+{
+    <p>No data available.</p>
+}
+
+@code {
+    private List<BigQueryResult> results;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await GetBigQueryData();
+    }
+
+    private async Task GetBigQueryData()
+    {
+        var response = await Http.GetAsync("http://localhost:5159/api/BigQuery/query?sql=SELECT%20*%20FROM%20publicdata.samples.shakespeare%20LIMIT%2010");
+        if (response.IsSuccessStatusCode)
+        {
+            var jsonString = await response.Content.ReadAsStringAsync();
+            var jsonDocument = JsonDocument.Parse(jsonString);
+            results = new List<BigQueryResult>();
+
+            foreach (var row in jsonDocument.RootElement.EnumerateArray())
+            {
+                var rawRow = row.GetProperty("rawRow").GetProperty("f");
+
+                var result = new BigQueryResult
+                {
+                    word = rawRow[0].GetProperty("v").GetString(),
+                    word_count = rawRow[1].GetProperty("v").GetString(),
+                    corpus = rawRow[2].GetProperty("v").GetString(),
+                    corpus_date = rawRow[3].GetProperty("v").GetString()
+                };
+                results.Add(result);
+            }
+        }
+        else
+        {
+            // Handle error response
+            results = null;
+        }
+    }
+}
